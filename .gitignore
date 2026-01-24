@@ -1,0 +1,5 @@
+# Ignore binary hasil build Go
+*.exe
+
+# Optional (rekomendasi)
+*.log
