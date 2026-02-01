@@ -1,7 +1,7 @@
 package models
 
-type Kategori struct {
-	ID        int    `json:"id"`
-	Nama      string `json:"nama"`
-	Deskripsi string `json:"deskripsi"`
+type Category struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
 }

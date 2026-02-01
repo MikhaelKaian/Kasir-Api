@@ -3,51 +3,57 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
+	"strings"
 
+	"kasir-api/database"
 	"kasir-api/handlers"
+	"kasir-api/repositories"
+	"kasir-api/services"
+
+	"github.com/spf13/viper"
 )
 
+type Config struct {
+	Port   string `mapstructure:"PORT"`
+	DBConn string `mapstructure:"DB_CONN"`
+}
+
 func main() {
-	http.HandleFunc("/api/produk/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			handlers.GetProdukByID(w, r)
-		} else if r.Method == "PUT" {
-			handlers.UpdateProduk(w, r)
-		} else if r.Method == "DELETE" {
-			handlers.DeleteProduk(w, r)
-		}
-	})
+	viper.AutomaticEnv()
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	http.HandleFunc("/api/produk", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+	if _, err := os.Stat(".env"); err == nil {
+		viper.SetConfigFile(".env")
+		_ = viper.ReadInConfig()
+	}
 
-		if r.Method == "GET" {
-			handlers.GetAllProduk(w, r)
-		} else if r.Method == "POST" {
-			handlers.CreateProduk(w, r)
-		}
-	})
+	config := Config{
+		Port:   viper.GetString("PORT"),
+		DBConn: viper.GetString("DB_CONN"),
+	}
 
-	http.HandleFunc("/api/kategori/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
-			handlers.GetKategoriByID(w, r)
-		} else if r.Method == "PUT" {
-			handlers.UpdateKategori(w, r)
-		} else if r.Method == "DELETE" {
-			handlers.DeleteKategori(w, r)
-		}
-	})
+	db, err := database.InitDB(config.DBConn)
+	if err != nil {
+		log.Fatal("Failed to initialize database:", err)
+	}
+	defer db.Close()
 
-	http.HandleFunc("/api/kategori", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+	ProductRepo := repositories.NewProductRepository(db)
+	ProductService := services.NewProductService(ProductRepo)
+	ProductHandler := handlers.NewProductHandler(ProductService)
 
-		if r.Method == "GET" {
-			handlers.GetAllKategori(w, r)
-		} else if r.Method == "POST" {
-			handlers.CreateKategori(w, r)
-		}
-	})
+	http.HandleFunc("/api/product", ProductHandler.HandleProducts)
+	http.HandleFunc("/api/product/", ProductHandler.HandleProductByID)
+
+	CategoryRepo := repositories.NewCategoryRepository(db)
+	CategoryService := services.NewCategoryService(CategoryRepo)
+	CategoryHandler := handlers.NewCategoryHandler(CategoryService)
+
+	http.HandleFunc("/api/category", CategoryHandler.HandleCategories)
+	http.HandleFunc("/api/category/", CategoryHandler.HandleCategoryByID)
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -57,9 +63,9 @@ func main() {
 		})
 	})
 
-	fmt.Println("Server Sedang Running di locallhost::8080")
+	fmt.Println("Server Sedang Running di locallhost:" + config.Port)
 
-	err := http.ListenAndServe(":8080", nil)
+	err = http.ListenAndServe(":"+config.Port, nil)
 	if err != nil {
 		fmt.Println("gagal running server")
 	}

@@ -1,3 +1,5 @@
+.env
+
 # Ignore binary hasil build Go
 *.exe
 

@@ -7,105 +7,130 @@ import (
 	"strings"
 
 	"kasir-api/models"
+	"kasir-api/services"
 )
 
-var kategori = []models.Kategori{
-	{ID: 1, Nama: "Makanan Berat", Deskripsi: "Makanan Berat Top Seller"},
-	{ID: 2, Nama: "Makanan Ringan", Deskripsi: "Makanan Ringan Top Seller"},
-	{ID: 3, Nama: "Minuman Dingin", Deskripsi: "Minuman Top Seller Karna Murah hehe"},
+type CategoryHandler struct {
+	service *services.CategoryService
 }
 
-func GetAllKategori(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(kategori)
+func NewCategoryHandler(service *services.CategoryService) *CategoryHandler {
+	return &CategoryHandler{service: service}
 }
 
-func GetKategoriByID(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func (h *CategoryHandler) HandleCategories(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.GetAll(w, r)
+	case http.MethodPost:
+		h.Create(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
 
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/kategori/")
-	id, err := strconv.Atoi(idStr)
+func (h *CategoryHandler) GetAll(w http.ResponseWriter, r *http.Request) {
+	categories, err := h.service.GetAll()
 	if err != nil {
-		http.Error(w, "Invalid Kategori ID", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	for _, k := range kategori {
-		if k.ID == id {
-			json.NewEncoder(w).Encode(k)
-			return
-		}
-	}
-	http.Error(w, "Kategori belum ada", http.StatusNotFound)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(categories)
 }
 
-func CreateKategori(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	var kategoriBaru models.Kategori
-
-	err := json.NewDecoder(r.Body).Decode(&kategoriBaru)
+func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
+	var category models.Category
+	err := json.NewDecoder(r.Body).Decode(&category)
 	if err != nil {
-		http.Error(w, "Invalid kategori ID", http.StatusBadRequest)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	kategoriBaru.ID = len(kategori) + 1
+	err = h.service.Create(&category)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-	kategori = append(kategori, kategoriBaru)
-
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(kategoriBaru)
+	json.NewEncoder(w).Encode(category)
 }
 
-func UpdateKategori(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/kategori/")
-	id, err := strconv.Atoi(idStr)
-	if err != nil {
-		http.Error(w, "Invalid Kategori ID", http.StatusBadRequest)
-		return
+func (h *CategoryHandler) HandleCategoryByID(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		h.GetByID(w, r)
+	case http.MethodPut:
+		h.Update(w, r)
+	case http.MethodDelete:
+		h.Delete(w, r)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
-
-	var updateKategori models.Kategori
-	err = json.NewDecoder(r.Body).Decode(&updateKategori)
-	if err != nil {
-		http.Error(w, "Invalid Kategori ID", http.StatusBadRequest)
-		return
-	}
-
-	for i := range kategori {
-		if kategori[i].ID == id {
-			updateKategori.ID = id
-			kategori[i] = updateKategori
-
-			json.NewEncoder(w).Encode(updateKategori)
-			return
-		}
-	}
-	http.Error(w, "kategori belum ada", http.StatusNotFound)
 }
 
-func DeleteKategori(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	idStr := strings.TrimPrefix(r.URL.Path, "/api/kategori/")
+func (h *CategoryHandler) GetByID(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/category/")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid Kategori ID", http.StatusBadRequest)
+		http.Error(w, "Invalid Category ID ", http.StatusBadRequest)
 		return
 	}
 
-	for i, k := range kategori {
-		if k.ID == id {
-			kategori = append(kategori[:i], kategori[i+1:]...)
-
-			json.NewEncoder(w).Encode(map[string]string{
-				"message": "Sukses Delete",
-			})
-			return
-		}
+	category, err := h.service.GetByID(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
 	}
-	http.Error(w, "Kategori belum ada", http.StatusNotFound)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(category)
+}
+
+func (h *CategoryHandler) Update(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/category/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid category ID", http.StatusBadRequest)
+		return
+	}
+
+	var category models.Category
+	err = json.NewDecoder(r.Body).Decode(&category)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	category.ID = id
+	err = h.service.Update(&category)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(category)
+}
+
+func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := strings.TrimPrefix(r.URL.Path, "/api/category/")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "Invalid category ID", http.StatusBadRequest)
+		return
+	}
+
+	err = h.service.Delete(id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Category delete successfully",
+	})
 }
