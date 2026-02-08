@@ -15,10 +15,12 @@ func NewTransactionRepository(db *sql.DB) *TransactionRepository {
 }
 
 func (repo *TransactionRepository) CreateTransaction(items []models.CheckoutItem) (*models.Transaction, error) {
-	var (
-		res *models.Transaction
-	)
 
+	if len(items) == 0 {
+		return nil, fmt.Errorf("items cannot be empty")
+	}
+
+	var res *models.Transaction
 	tx, err := repo.db.Begin()
 	if err != nil {
 		return nil, err
@@ -27,14 +29,17 @@ func (repo *TransactionRepository) CreateTransaction(items []models.CheckoutItem
 
 	totalAmount := 0
 	details := make([]models.TransactionDetail, 0)
+
 	for _, item := range items {
 		var productName string
 		var productID, price, stock int
-		err := tx.QueryRow("SELECT id, name, price, stock FROM products WHERE id=$1", item.ProductID).Scan(&productID, &productName, &price, &stock)
+
+		err := tx.QueryRow("SELECT id, name, price, stock FROM products WHERE id=$1", item.ProductID).
+			Scan(&productID, &productName, &price, &stock)
+
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("product id %d not found", item.ProductID)
 		}
-
 		if err != nil {
 			return nil, err
 		}
@@ -56,14 +61,16 @@ func (repo *TransactionRepository) CreateTransaction(items []models.CheckoutItem
 	}
 
 	var transactionID int
-	err = tx.QueryRow("INSERT INTO transactions (total_amount) VALUES ($1) RETURNING ID", totalAmount).Scan(&transactionID)
+	err = tx.QueryRow("INSERT INTO transactions (total_amount) VALUES ($1) RETURNING ID", totalAmount).
+		Scan(&transactionID)
 	if err != nil {
 		return nil, err
 	}
 
 	for i := range details {
 		details[i].TransactionID = transactionID
-		_, err = tx.Exec("INSERT INTO transaction_details (transaction_id, product_id, quantity, subtotal) VALUES ($1, $2, $3, $4)",
+		_, err = tx.Exec(
+			"INSERT INTO transaction_details (transaction_id, product_id, quantity, subtotal) VALUES ($1, $2, $3, $4)",
 			transactionID, details[i].ProductID, details[i].Quantity, details[i].Subtotal)
 		if err != nil {
 			return nil, err

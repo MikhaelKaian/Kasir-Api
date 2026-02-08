@@ -15,19 +15,12 @@ func NewProductRepository(db *sql.DB) *ProductRepository {
 	return &ProductRepository{db: db}
 }
 
-func (repo *ProductRepository) GetAll() ([]models.Product, error) {
+func (repo *ProductRepository) GetAll(name string) ([]models.Product, error) {
 	query := `SELECT 
 				p.id, p.name, p.price, p.stock, p.category_id, 
 				c.id as cat_id, c.name as cat_name, c.description as cat_description
 			FROM products p INNER JOIN
-			categories c ON p.category_id = c.id
-			ORDER BY p.id `
-
-	rows, err := repo.db.Query(query)
-	if err != nil {
-		return nil, fmt.Errorf("query error %w", err)
-	}
-	defer rows.Close()
+			categories c ON p.category_id = c.id `
 
 	args := []interface{}{}
 	if name != "" {
@@ -39,7 +32,7 @@ func (repo *ProductRepository) GetAll() ([]models.Product, error) {
 
 	rows, err := repo.db.Query(query, args...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("query error: %w", err)
 	}
 	defer rows.Close()
 

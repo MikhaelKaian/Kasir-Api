@@ -3,14 +3,15 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"kasir-api/database"
-	"kasir-api/handlers"
-	"kasir-api/repositories"
-	"kasir-api/services"
 	"log"
 	"net/http"
 	"os"
 	"strings"
+
+	"kasir-api/database"
+	"kasir-api/handlers"
+	"kasir-api/repositories"
+	"kasir-api/services"
 
 	"github.com/spf13/viper"
 )
@@ -59,17 +60,19 @@ func main() {
 	transactionHandler := handlers.NewTransactionHandler(transactionService)
 
 	// Setup routes
-	http.HandleFunc("/api/produk", productHandler.HandleProducts)
-	http.HandleFunc("/api/produk/", productHandler.HandleProductByID)
-	http.HandleFunc("/api/categories", categoryHandler.HandleCategories)
-	http.HandleFunc("/api/categories/", categoryHandler.HandleCategoryByID)
-	http.HandleFunc("/api/checkout", transactionHandler.Checkout)
+	// PERHATIKAN: Sesuaikan dengan handler Anda
+	// Jika handler menggunakan "product" bukan "produk", sesuaikan
+	http.HandleFunc("/api/product", productHandler.HandleProducts)
+	http.HandleFunc("/api/product/", productHandler.HandleProductByID)
+	http.HandleFunc("/api/category", categoryHandler.HandleCategories)
+	http.HandleFunc("/api/category/", categoryHandler.HandleCategoryByID)
+	http.HandleFunc("/api/checkout", transactionHandler.HandleCheckout)
 
 	// Report routes
-	http.HandleFunc("/api/report/hari-ini", transactionHandler.HandleTodayReport)
+	http.HandleFunc("/api/report/today", transactionHandler.HandleTodayReport)
 	http.HandleFunc("/api/report", transactionHandler.HandleReport)
 
-	// Health check endpoint
+	// Health check endpoint - PERBAIKI sintaks
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
@@ -79,8 +82,13 @@ func main() {
 	})
 
 	// Start server
-	serverAddr := ":" + config.Port
-	fmt.Printf("🚀 Server running on http://localhost%s\n", serverAddr)
+	port := config.Port
+	if port == "" {
+		port = "8080" // default port
+	}
+
+	serverAddr := ":" + port
+	fmt.Printf("Server running on http://localhost%s\n", serverAddr)
 	fmt.Println("Press Ctrl+C to stop")
 
 	if err := http.ListenAndServe(serverAddr, nil); err != nil {
