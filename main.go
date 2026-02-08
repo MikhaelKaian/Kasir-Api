@@ -3,15 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
-	"net/http"
-	"os"
-	"strings"
-
 	"kasir-api/database"
 	"kasir-api/handlers"
 	"kasir-api/repositories"
 	"kasir-api/services"
+	"log"
+	"net/http"
+	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -27,7 +26,10 @@ func main() {
 
 	if _, err := os.Stat(".env"); err == nil {
 		viper.SetConfigFile(".env")
-		_ = viper.ReadInConfig()
+		viper.SetConfigType("env")
+		if err := viper.ReadInConfig(); err != nil {
+			log.Fatalf("Error reading config: %v", err)
+		}
 	}
 
 	config := Config{
@@ -35,26 +37,39 @@ func main() {
 		DBConn: viper.GetString("DB_CONN"),
 	}
 
+	// Setup database
 	db, err := database.InitDB(config.DBConn)
 	if err != nil {
-		log.Fatal("Failed to initialize database:", err)
+		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer db.Close()
 
-	ProductRepo := repositories.NewProductRepository(db)
-	ProductService := services.NewProductService(ProductRepo)
-	ProductHandler := handlers.NewProductHandler(ProductService)
+	fmt.Println("✅ Database connected successfully!")
 
-	http.HandleFunc("/api/product", ProductHandler.HandleProducts)
-	http.HandleFunc("/api/product/", ProductHandler.HandleProductByID)
+	productRepo := repositories.NewProductRepository(db)
+	productService := services.NewProductService(productRepo)
+	productHandler := handlers.NewProductHandler(productService)
 
-	CategoryRepo := repositories.NewCategoryRepository(db)
-	CategoryService := services.NewCategoryService(CategoryRepo)
-	CategoryHandler := handlers.NewCategoryHandler(CategoryService)
+	categoryRepo := repositories.NewCategoryRepository(db)
+	categoryService := services.NewCategoryService(categoryRepo)
+	categoryHandler := handlers.NewCategoryHandler(categoryService)
 
-	http.HandleFunc("/api/category", CategoryHandler.HandleCategories)
-	http.HandleFunc("/api/category/", CategoryHandler.HandleCategoryByID)
+	transactionRepo := repositories.NewTransactionRepository(db)
+	transactionService := services.NewTransactionService(transactionRepo)
+	transactionHandler := handlers.NewTransactionHandler(transactionService)
 
+	// Setup routes
+	http.HandleFunc("/api/produk", productHandler.HandleProducts)
+	http.HandleFunc("/api/produk/", productHandler.HandleProductByID)
+	http.HandleFunc("/api/categories", categoryHandler.HandleCategories)
+	http.HandleFunc("/api/categories/", categoryHandler.HandleCategoryByID)
+	http.HandleFunc("/api/checkout", transactionHandler.Checkout)
+
+	// Report routes
+	http.HandleFunc("/api/report/hari-ini", transactionHandler.HandleTodayReport)
+	http.HandleFunc("/api/report", transactionHandler.HandleReport)
+
+	// Health check endpoint
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{
@@ -63,10 +78,12 @@ func main() {
 		})
 	})
 
-	fmt.Println("Server Sedang Running di locallhost:" + config.Port)
+	// Start server
+	serverAddr := ":" + config.Port
+	fmt.Printf("🚀 Server running on http://localhost%s\n", serverAddr)
+	fmt.Println("Press Ctrl+C to stop")
 
-	err = http.ListenAndServe(":"+config.Port, nil)
-	if err != nil {
-		fmt.Println("gagal running server")
+	if err := http.ListenAndServe(serverAddr, nil); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
 	}
 }

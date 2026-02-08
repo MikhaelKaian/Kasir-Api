@@ -30,7 +30,8 @@ func (h *ProductHandler) HandleProducts(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *ProductHandler) GetAll(w http.ResponseWriter, r *http.Request) {
-	products, err := h.service.GetAll()
+	name := r.URL.Query().Get("name")
+	products, err := h.service.GetProducts(name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -41,10 +42,38 @@ func (h *ProductHandler) GetAll(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
+
 	var product models.Product
 	err := json.NewDecoder(r.Body).Decode(&product)
 	if err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if product.CategoryID == nil {
+		if product.Category != nil && product.Category.ID > 0 {
+			product.CategoryID = &product.Category.ID
+		} else {
+			http.Error(w, "Category ID is required", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if *product.CategoryID <= 0 {
+		http.Error(w, "Category ID must be greater than 0", http.StatusBadRequest)
+		return
+	}
+
+	if product.Name == "" {
+		http.Error(w, "Product name is required", http.StatusBadRequest)
+		return
+	}
+	if product.Price <= 0 {
+		http.Error(w, "Price must be greater than 0", http.StatusBadRequest)
+		return
+	}
+	if product.Stock < 0 {
+		http.Error(w, "Stock cannot be negative", http.StatusBadRequest)
 		return
 	}
 
@@ -54,9 +83,15 @@ func (h *ProductHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	createdProduct, err := h.service.GetByID(product.ID)
+	if err != nil {
+		http.Error(w, "Failed to retrieve created product: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(product)
+	json.NewEncoder(w).Encode(createdProduct)
 }
 
 func (h *ProductHandler) HandleProductByID(w http.ResponseWriter, r *http.Request) {
@@ -76,13 +111,13 @@ func (h *ProductHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	idStr := strings.TrimPrefix(r.URL.Path, "/api/product/")
 	id, err := strconv.Atoi(idStr)
 	if err != nil {
-		http.Error(w, "Invalid Product ID ", http.StatusBadRequest)
+		http.Error(w, "Invalid Product ID", http.StatusBadRequest)
 		return
 	}
 
 	product, err := h.service.GetByID(id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		http.Error(w, "Product not found or has no category", http.StatusNotFound)
 		return
 	}
 
@@ -101,18 +136,40 @@ func (h *ProductHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var product models.Product
 	err = json.NewDecoder(r.Body).Decode(&product)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	product.ID = id
+
+	if product.CategoryID == nil {
+		if product.Category != nil && product.Category.ID > 0 {
+			product.CategoryID = &product.Category.ID
+		} else {
+			http.Error(w, "Category ID is required", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if *product.CategoryID <= 0 {
+		http.Error(w, "Category ID must be greater than 0", http.StatusBadRequest)
+		return
+	}
+
 	err = h.service.Update(&product)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	updatedProduct, err := h.service.GetByID(id)
+	if err != nil {
+		http.Error(w, "Failed to retrieve updated product: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(product)
+	json.NewEncoder(w).Encode(updatedProduct)
 }
 
 func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +188,6 @@ func (h *ProductHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Product delete successfully",
+		"message": "Product deleted successfully",
 	})
 }
